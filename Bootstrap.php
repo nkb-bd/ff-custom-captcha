@@ -21,11 +21,6 @@ class FFCustomField extends BaseFieldManager
         );
         
         add_filter("fluentform_validate_input_item_{$this->key}", [$this, 'validate'], 10, 5);
-        
-        add_filter('fluentform/before_form_render', function ($form) {
-            $this->generateCode(true);
-        }, 10, 1);
-        
         $this->hideFieldFormEntries();
     }
     
@@ -47,7 +42,8 @@ class FFCustomField extends BaseFieldManager
                 'label'              => $this->title,
                 'label_placement'    => '',
                 'help_message'       => '',
-                'error_message'      => __('Recaptcha does not match! Please reload and try again', 'ff_custom_recaptcha'),
+                'error_message'      => __('Recaptcha does not match! Please reload and try again',
+                    'ff_custom_recaptcha'),
                 'captcha_answer'     => '',
                 'captcha_type'       => 'image',
                 'conditional_logics' => []
@@ -111,17 +107,15 @@ class FFCustomField extends BaseFieldManager
         $name = ArrayHelper::get($field, 'raw.attributes.name');
         $value = ArrayHelper::get($formData, $name);
         $message = ArrayHelper::get($field, 'raw.settings.error_message');
-        
         $type = ArrayHelper::get($field, 'raw.settings.captcha_type');
         
         if ($type == 'image') {
-            $captchaCode = $_COOKIE['ff_custom_recaptcha_image_code'] ?? false;
-            $captchaCode = \FluentForm\App\Helpers\Protector::decrypt($captchaCode);
+            $captchaCode = $_SESSION['ff_custom_recaptcha_image_code'] ?? false;
             if ($value !== $captchaCode) {
                 $errorMessage = [$message];
             }
         } elseif ($type == 'math') {
-            $math = $_COOKIE['ff_custom_recaptcha_math_problem'] ?? false;
+            $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
             $expression = $math;
             $value = (int)$value;
             $result = eval("return $expression;");
@@ -142,20 +136,11 @@ class FFCustomField extends BaseFieldManager
         $data['attributes']['id'] = $this->makeElementId($data, $form);
         $type = ArrayHelper::get($data, 'settings.captcha_type');
         if ($type == 'image') {
-            $captchaCode = $_COOKIE['ff_custom_recaptcha_image_code'] ?? false;
-            if (!$captchaCode) {
-                $captchaCode = $this->setCaptchaCode();
-            } else {
-                $captchaCode = \FluentForm\App\Helpers\Protector::decrypt($captchaCode);
-            }
+            $captchaCode = $_SESSION['ff_custom_recaptcha_image_code'] ?? false;
             $captcha_image = $this->generateImageWithCode($captchaCode);
             echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
         } elseif ($type == 'math') {
-            $math = $_COOKIE['ff_custom_recaptcha_math_problem'] ?? false;
-            if (!$math) {
-                $math = $this->setMathCode();
-            }
-            
+            $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
             $captcha_image = $this->generateImageWithCode($math);
             echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
         }
@@ -181,7 +166,7 @@ class FFCustomField extends BaseFieldManager
         }, 10, 3);
     }
     
-    private function generateImageWithCode($captcha_code)
+    public function generateImageWithCode($captcha_code)
     {
         ob_start();
         
@@ -189,7 +174,7 @@ class FFCustomField extends BaseFieldManager
         $orange = imagecolorallocate($im, 0xFF, 0x8c, 0x00);
         $white = imagecolorallocate($im, 0xFF, 0xFF, 0xFF);
         imagefilledrectangle($im, 0, 0, 220, 35, $orange);
-        $font_file = '/Volumes/Projects/forms/wp-content/uploads/FLUENT_PDF_TEMPLATES/fonts/FreeMono.ttf';
+        $font_file = FF_CUSTOM_CAPTCHA_DIR_PATH.'assets/FreeMono.ttf';
         imagefttext($im, 30, 0, 5, 30, $white, $font_file, $captcha_code);
         imagepng($im);
         imagedestroy($im);
@@ -197,64 +182,58 @@ class FFCustomField extends BaseFieldManager
         return ob_get_clean();
     }
     
-    public function getCode()
-    {
-        $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        $captchaCode = '';
-        
-        $captchaCode .= $characters[rand(0, 25)];
-        $captchaCode .= $characters[rand(26, 51)];
-        $captchaCode .= $characters[rand(52, 61)];
-        
-        for ($i = 0; $i < 3; $i++) {
-            $captchaCode .= $characters[rand(0, 61)];
-        }
-        return str_shuffle($captchaCode);
-    }
-    
-    public function generateMathProblem()
-    {
-        $num1 = rand(0, 10);
-        $num2 = rand(0, 10);
-        $operator = rand(0, 1) == 1 ? '+' : '-';
-        return "$num1 $operator $num2";
-    }
-    
-    public function setCookie($name, $val, $encrypt = true)
-    {
-        if (!isset($_COOKIE[$name])) {
-            if($encrypt){
-                $val = \FluentForm\App\Helpers\Protector::encrypt($val);
-            }else{
-                $val = $val;
-            }
-            setcookie($name, $val, time() + 60, '/');
-        }
-    }
-    
-    function generateCode($force = false)
-    {
-        $this->setCaptchaCode();
-        $this->setMathCode();
-    }
-    
-    private function setCaptchaCode()
-    {
-        $code = $this->getCode();
-        $this->setCookie('ff_custom_recaptcha_image_code', $code);
-        return $code;
-    }
-    
-    private function setMathCode()
-    {
-        $math = $this->generateMathProblem();
-        $this->setCookie('ff_custom_recaptcha_math_problem', $math ,$encrypt = false);
-        return $math;
-    }
-    
 }
 
-add_action('wp', function () {
-    (new \FFConfirmField())->generateCode();
+function ffC_captcha_code()
+{
+    $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    $captchaCode = '';
+    
+    $captchaCode .= $characters[rand(0, 25)];
+    $captchaCode .= $characters[rand(26, 51)];
+    $captchaCode .= $characters[rand(52, 61)];
+    
+    for ($i = 0; $i < 3; $i++) {
+        $captchaCode .= $characters[rand(0, 61)];
+    }
+    return $captchaCode;
+}
+
+function ffc_math_problem()
+{
+    $num1 = rand(0, 10);
+    $num2 = rand(0, 10);
+    $operator = rand(0, 1) == 1 ? '+' : '-';
+    $problem = "$num1 $operator $num2";
+    return $problem;
+}
+
+function ffc_generate_code($force = false)
+{
+    if (!session_id()) {
+        session_start();
+    }
+    $captchaCode = ffC_captcha_code();
+    if (!isset($_SESSION['ff_custom_recaptcha_image_code'])) {
+        $_SESSION['ff_custom_recaptcha_image_code'] = $captchaCode;
+    }
+    
+    
+    $problem = ffc_math_problem();
+    if (!isset($_SESSION['ff_custom_recaptcha_math_problem'])) {
+        $_SESSION['ff_custom_recaptcha_math_problem'] = $problem;
+    }
+    if ($force) {
+        $_SESSION['ff_custom_recaptcha_image_code'] = $captchaCode;
+        $_SESSION['ff_custom_recaptcha_math_problem'] = $problem;
+    }
+}
+
+add_action('init', function () {
+    ffc_generate_code();
+});
+
+add_action('fluentform/submission_inserted', function () {
+    ffc_generate_code($force = true);
 });
 
