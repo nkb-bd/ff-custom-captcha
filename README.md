@@ -4,7 +4,7 @@ A captcha Field WordPress Plugin Addon for  WP Fluent Form Plugin.
 
 
 These has three type of captcha options
-. Image Captcha
-. Math Captcha
-. Question and Answer Captcha
+- Image Captcha
+- Math Captcha
+- Question and Answer Captcha
 
