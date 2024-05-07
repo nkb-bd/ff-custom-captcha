@@ -46,6 +46,8 @@ class FFCustomField extends BaseFieldManager
                     'ff_custom_recaptcha'),
                 'captcha_answer'     => '',
                 'captcha_type'       => 'image',
+                'text_color'         => '255, 255, 255',
+                'bg_color'           => '255, 140, 0',
                 'conditional_logics' => []
             ],
             'editor_options' => [
@@ -99,6 +101,14 @@ class FFCustomField extends BaseFieldManager
                 'template' => 'inputText',
                 'label'    => 'Error Message',
             ],
+            'text_color'  => [
+                'template' => 'inputText',
+                'label'    => 'Text Color',
+            ],
+            'bg_color'  => [
+                'template' => 'inputText',
+                'label'    => 'Background Color',
+            ],
         ];
     }
     
@@ -135,13 +145,18 @@ class FFCustomField extends BaseFieldManager
     {
         $data['attributes']['id'] = $this->makeElementId($data, $form);
         $type = ArrayHelper::get($data, 'settings.captcha_type');
+        $bgColor = ArrayHelper::get($data, 'settings.bg_color');
+        $bgColor = $this->textColorToRgbArray($bgColor);
+        $fontColor = ArrayHelper::get($data, 'settings.text_color');
+        $fontColor = $this->textColorToRgbArray($fontColor);
         if ($type == 'image') {
             $captchaCode = $_SESSION['ff_custom_recaptcha_image_code'] ?? false;
-            $captcha_image = $this->generateImageWithCode($captchaCode);
+    
+            $captcha_image = $this->generateImageWithCode($captchaCode,$bgColor,$fontColor);
             echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
         } elseif ($type == 'math') {
             $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
-            $captcha_image = $this->generateImageWithCode($math);
+            $captcha_image = $this->generateImageWithCode($math,$bgColor,$fontColor);
             echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
         }
         return (new FluentForm\App\Services\FormBuilder\Components\Text())->compile($data, $form);
@@ -166,18 +181,51 @@ class FFCustomField extends BaseFieldManager
         }, 10, 3);
     }
     
-    public function generateImageWithCode($captcha_code)
+    public function textColorToRgbArray($colorText) {
+        $components = explode(',', $colorText);
+        return array_map('intval', $components);
+    }
+    
+    public function isValidColor($color)
     {
+        foreach ($color as $value) {
+            if (!is_int($value) || $value < 0 || $value > 255) {
+                return false;
+            }
+        }
+        return true;
+    }
+    public function generateImageWithCode($captcha_code, $background_color = [0xFF, 0x8c, 0x00], $text_color = [0xFF, 0xFF, 0xFF])
+    {
+        if (!is_array($background_color) || count($background_color) != 3 || !$this->isValidColor($background_color)) {
+            $background_color = [0xFF, 0x8c, 0x00];
+        }
+    
+        if (!is_array($text_color) || count($text_color) != 3 || !$this->isValidColor($text_color)) {
+            $text_color = [0xFF, 0xFF, 0xFF];
+        }
+    
         ob_start();
         
-        $im = imagecreatetruecolor(220, 35);
-        $orange = imagecolorallocate($im, 0xFF, 0x8c, 0x00);
-        $white = imagecolorallocate($im, 0xFF, 0xFF, 0xFF);
-        imagefilledrectangle($im, 0, 0, 220, 35, $orange);
+        // Create a larger canvas to accommodate the pixelation effect
+        $im = imagecreatetruecolor(440, 70);
+        
+        $background = imagecolorallocate($im, $background_color[0], $background_color[1], $background_color[2]);
+        $text = imagecolorallocate($im, $text_color[0], $text_color[1], $text_color[2]);
+        
+        imagefilledrectangle($im, 0, 0, 440, 70, $background);
+        
         $font_file = FF_CUSTOM_CAPTCHA_DIR_PATH.'assets/FreeMono.ttf';
-        imagefttext($im, 30, 0, 5, 30, $white, $font_file, $captcha_code);
-        imagepng($im);
+        imagefttext($im, 30, 0, 5, 45, $text, $font_file, $captcha_code);
+        
+        // Resize the image to create pixelation effect
+        $resized_im = imagecreatetruecolor(220, 35);
+        imagecopyresized($resized_im, $im, 0, 0, 0, 0, 220, 35, 440, 70);
+        
+        imagepng($resized_im);
+        
         imagedestroy($im);
+        imagedestroy($resized_im);
         
         return ob_get_clean();
     }
