@@ -127,11 +127,16 @@ class FFCustomField extends BaseFieldManager
         } elseif ($type == 'math') {
             $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
             $expression = $math;
-            $value = (int)$value;
-            $result = eval("return $expression;");
-            if ($value !== $result) {
-                $errorMessage = [$message];
+            $sanitized_expression = preg_replace('/[^0-9+\-\/\*%]/', '', $expression);
+            if (!empty($sanitized_expression)) {
+                $value = (int)$value;
+    
+                $result = eval("return $sanitized_expression;");
+                if ($value !== $result) {
+                    $errorMessage = [$message];
+                }
             }
+          
         } else {
             $textCaptchaValue = ArrayHelper::get($field, 'raw.settings.captcha_answer');
             if ($value !== $textCaptchaValue) {
@@ -150,14 +155,14 @@ class FFCustomField extends BaseFieldManager
         $fontColor = ArrayHelper::get($data, 'settings.text_color');
         $fontColor = $this->textColorToRgbArray($fontColor);
         if ($type == 'image') {
-            $captchaCode = $_SESSION['ff_custom_recaptcha_image_code'] ?? false;
-    
-            $captcha_image = $this->generateImageWithCode($captchaCode,$bgColor,$fontColor);
-            echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
+            $captchaCode = isset($_SESSION['ff_custom_recaptcha_image_code']) ? $_SESSION['ff_custom_recaptcha_image_code'] : false;
+        
+            $captcha_image = $this->generateImageWithCode($captchaCode, $bgColor, $fontColor);
+            echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         } elseif ($type == 'math') {
-            $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
-            $captcha_image = $this->generateImageWithCode($math,$bgColor,$fontColor);
-            echo '<img src="data:image/png;base64,' . base64_encode($captcha_image) . '" alt="Captcha Image" />';
+            $math = isset($_SESSION['ff_custom_recaptcha_math_problem']) ? $_SESSION['ff_custom_recaptcha_math_problem'] : false;
+            $captcha_image = $this->generateImageWithCode($math, $bgColor, $fontColor);
+            echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         }
         return (new FluentForm\App\Services\FormBuilder\Components\Text())->compile($data, $form);
     }
@@ -237,21 +242,21 @@ function ffC_captcha_code()
     $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     $captchaCode = '';
     
-    $captchaCode .= $characters[rand(0, 25)];
-    $captchaCode .= $characters[rand(26, 51)];
-    $captchaCode .= $characters[rand(52, 61)];
+    $captchaCode .= $characters[wp_rand(0, 25)];
+    $captchaCode .= $characters[wp_rand(26, 51)];
+    $captchaCode .= $characters[wp_rand(52, 61)];
     
     for ($i = 0; $i < 3; $i++) {
-        $captchaCode .= $characters[rand(0, 61)];
+        $captchaCode .= $characters[wp_rand(0, 61)];
     }
     return $captchaCode;
 }
 
 function ffc_math_problem()
 {
-    $num1 = rand(0, 10);
-    $num2 = rand(0, 10);
-    $operator = rand(0, 1) == 1 ? '+' : '-';
+    $num1 = wp_rand(0, 10);
+    $num2 = wp_rand(0, 10);
+    $operator = wp_rand(0, 1) == 1 ? '+' : '-';
     $problem = "$num1 $operator $num2";
     return $problem;
 }

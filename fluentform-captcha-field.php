@@ -1,6 +1,6 @@
 <?php
 
-/*
+/**
 Plugin Name: Custom Captcha Field for Fluent Forms
 Description: Custom Captcha - 3 types of captcha
 Version: 1.0
