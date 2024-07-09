@@ -3,13 +3,13 @@
 /**
 Plugin Name: Custom Captcha Field for Fluent Forms
 Description: Custom Captcha - 3 types of captcha
-Version: 1.0
+Version: 0.1
 Author: Lukman Nakib
-Author URI: https://fluentforms.com
-Plugin URI: https://wpmanageninja.com/wp-fluent-form/
+Author URI: https://nkb-bd.github.io/
 License: GPLv2 or later
 Text Domain: ff_custom_recaptcha
-*/
+**/
+
 
 defined('ABSPATH') or die;
 
