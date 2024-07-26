@@ -7,7 +7,7 @@ Version: 0.1
 Author: Lukman Nakib
 Author URI: https://nkb-bd.github.io/
 License: GPLv2 or later
-Text Domain: ff_custom_recaptcha
+Text Domain: custom-captcha-field-for-fluent-forms
 **/
 
 
@@ -47,13 +47,13 @@ class FFRecaptcha
             
             $class = 'notice notice-error';
             
-            $install_url_text = __('Click Here to Install the Plugin', 'ff_custom_recaptcha');
+            $install_url_text = __('Click Here to Install the Plugin', 'fluent-crm-block-editor');
             
             if ($pluginInfo->action == 'activate') {
-                $install_url_text = __('Click Here to Activate the Plugin', 'ff_custom_recaptcha');
+                $install_url_text = __('Click Here to Activate the Plugin', 'fluent-crm-block-editor');
             }
             
-            $message = __('FluentForm pdf Add-On Requires Fluent Forms Plugin, ', 'ff_custom_recaptcha');
+            $message = __('FluentForm pdf Add-On Requires Fluent Forms Plugin, ', 'fluent-crm-block-editor');
             $message .= '<b><a href="' .$pluginInfo->url . '">' . $install_url_text . '</a></b>';
             
             printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), wp_kses_post($message));

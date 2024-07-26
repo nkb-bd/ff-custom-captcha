@@ -34,7 +34,7 @@ class FFCustomField extends BaseFieldManager
                 'class'       => '',
                 'value'       => '',
                 'type'        => 'text',
-                'placeholder' => __('Answer', 'ff_custom_recaptcha')
+                'placeholder' => __('Answer', 'custom-captcha-field-for-fluent-forms')
             ],
             'settings'       => [
                 'container_class'    => '',
@@ -43,7 +43,7 @@ class FFCustomField extends BaseFieldManager
                 'label_placement'    => '',
                 'help_message'       => '',
                 'error_message'      => __('Recaptcha does not match! Please reload and try again',
-                    'ff_custom_recaptcha'),
+                    'custom-captcha-field-for-fluent-forms'),
                 'captcha_answer'     => '',
                 'captcha_type'       => 'image',
                 'text_color'         => '255, 255, 255',
@@ -76,15 +76,15 @@ class FFCustomField extends BaseFieldManager
                 'options'  => [
                     [
                         'value' => 'image',
-                        'label' => __('Image', 'fluentform'),
+                        'label' => __('Image', 'custom-captcha-field-for-fluent-forms'),
                     ],
                     [
                         'value' => 'math',
-                        'label' => __('Math', 'fluentform'),
+                        'label' => __('Math', 'custom-captcha-field-for-fluent-forms'),
                     ],
                     [
                         'value' => 'text',
-                        'label' => __('Text', 'fluentform'),
+                        'label' => __('Text', 'custom-captcha-field-for-fluent-forms'),
                     ],
                 ]
             ],
@@ -114,31 +114,29 @@ class FFCustomField extends BaseFieldManager
     
     public function validate($errorMessage, $field, $formData, $fields, $form)
     {
-        $name = ArrayHelper::get($field, 'raw.attributes.name');
-        $value = ArrayHelper::get($formData, $name);
-        $message = ArrayHelper::get($field, 'raw.settings.error_message');
-        $type = ArrayHelper::get($field, 'raw.settings.captcha_type');
-        
+        $name = sanitize_text_field(ArrayHelper::get($field, 'raw.attributes.name'));
+        $value = sanitize_text_field(ArrayHelper::get($formData, $name));
+        $message = wp_kses_post(ArrayHelper::get($field, 'raw.settings.error_message'));
+        $type = sanitize_text_field(ArrayHelper::get($field, 'raw.settings.captcha_type'));
+    
         if ($type == 'image') {
-            $captchaCode = $_SESSION['ff_custom_recaptcha_image_code'] ?? false;
+            $captchaCode = sanitize_text_field($_SESSION['ff_custom_recaptcha_image_code'] ?? '');
             if ($value !== $captchaCode) {
                 $errorMessage = [$message];
             }
         } elseif ($type == 'math') {
-            $math = $_SESSION['ff_custom_recaptcha_math_problem'] ?? false;
+            $math = sanitize_text_field($_SESSION['ff_custom_recaptcha_math_problem'] ?? '');
             $expression = $math;
             $sanitized_expression = preg_replace('/[^0-9+\-\/\*%]/', '', $expression);
             if (!empty($sanitized_expression)) {
-                $value = (int)$value;
-    
+                $value = intval($value);
                 $result = eval("return $sanitized_expression;");
                 if ($value !== $result) {
                     $errorMessage = [$message];
                 }
             }
-          
         } else {
-            $textCaptchaValue = ArrayHelper::get($field, 'raw.settings.captcha_answer');
+            $textCaptchaValue = sanitize_text_field(ArrayHelper::get($field, 'raw.settings.captcha_answer'));
             if ($value !== $textCaptchaValue) {
                 $errorMessage = [$message];
             }
@@ -149,18 +147,18 @@ class FFCustomField extends BaseFieldManager
     public function render($data, $form)
     {
         $data['attributes']['id'] = $this->makeElementId($data, $form);
-        $type = ArrayHelper::get($data, 'settings.captcha_type');
-        $bgColor = ArrayHelper::get($data, 'settings.bg_color');
+        $type = sanitize_text_field(ArrayHelper::get($data, 'settings.captcha_type'));
+        $bgColor = sanitize_text_field(ArrayHelper::get($data, 'settings.bg_color'));
         $bgColor = $this->textColorToRgbArray($bgColor);
-        $fontColor = ArrayHelper::get($data, 'settings.text_color');
+        $fontColor = sanitize_text_field(ArrayHelper::get($data, 'settings.text_color'));
         $fontColor = $this->textColorToRgbArray($fontColor);
         if ($type == 'image') {
-            $captchaCode = isset($_SESSION['ff_custom_recaptcha_image_code']) ? $_SESSION['ff_custom_recaptcha_image_code'] : false;
+            $captchaCode = isset($_SESSION['ff_custom_recaptcha_image_code']) ? sanitize_text_field($_SESSION['ff_custom_recaptcha_image_code']) : false;
         
             $captcha_image = $this->generateImageWithCode($captchaCode, $bgColor, $fontColor);
             echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         } elseif ($type == 'math') {
-            $math = isset($_SESSION['ff_custom_recaptcha_math_problem']) ? $_SESSION['ff_custom_recaptcha_math_problem'] : false;
+            $math = isset($_SESSION['ff_custom_recaptcha_math_problem']) ? sanitize_text_field($_SESSION['ff_custom_recaptcha_math_problem']) : false;
             $captcha_image = $this->generateImageWithCode($math, $bgColor, $fontColor);
             echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         }
@@ -263,9 +261,10 @@ function ffc_math_problem()
 
 function ffc_generate_code($force = false)
 {
-    if (!session_id()) {
-        session_start();
-    }
+    // if (session_id() == '') {
+    //     session_start();
+    // }
+
     $captchaCode = ffC_captcha_code();
     if (!isset($_SESSION['ff_custom_recaptcha_image_code'])) {
         $_SESSION['ff_custom_recaptcha_image_code'] = $captchaCode;
