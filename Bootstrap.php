@@ -119,21 +119,35 @@ class FFCustomField extends BaseFieldManager
         $message = wp_kses_post(ArrayHelper::get($field, 'raw.settings.error_message'));
         $type = sanitize_text_field(ArrayHelper::get($field, 'raw.settings.captcha_type'));
     
+        $codes = ffc_manage_captcha_file('read');
+        $valid = false;
+    
         if ($type == 'image') {
-            $captchaCode = sanitize_text_field($_SESSION['ff_custom_recaptcha_image_code'] ?? '');
-            if ($value !== $captchaCode) {
+            foreach ($codes as $code) {
+                if (strpos($code, 'image,') === 0 && substr($code, 6) === $value) {
+                    $valid = true;
+                    break;
+                }
+            }
+            if (!$valid) {
                 $errorMessage = [$message];
             }
         } elseif ($type == 'math') {
-            $math = sanitize_text_field($_SESSION['ff_custom_recaptcha_math_problem'] ?? '');
-            $expression = $math;
-            $sanitized_expression = preg_replace('/[^0-9+\-\/\*%]/', '', $expression);
-            if (!empty($sanitized_expression)) {
-                $value = intval($value);
-                $result = eval("return $sanitized_expression;");
-                if ($value !== $result) {
-                    $errorMessage = [$message];
+            foreach ($codes as $code) {
+                if (strpos($code, 'math,') === 0) {
+                    $math = substr($code, 5);
+                    $sanitized_expression = preg_replace('/[^0-9+\-\/\*%]/', '', $math);
+                    if (!empty($sanitized_expression)) {
+                        $result = eval("return $sanitized_expression;");
+                        if (intval($value) === $result) {
+                            $valid = true;
+                            break;
+                        }
+                    }
                 }
+            }
+            if (!$valid) {
+                $errorMessage = [$message];
             }
         } else {
             $textCaptchaValue = sanitize_text_field(ArrayHelper::get($field, 'raw.settings.captcha_answer'));
@@ -152,17 +166,31 @@ class FFCustomField extends BaseFieldManager
         $bgColor = $this->textColorToRgbArray($bgColor);
         $fontColor = sanitize_text_field(ArrayHelper::get($data, 'settings.text_color'));
         $fontColor = $this->textColorToRgbArray($fontColor);
+    
+        $codes = ffc_manage_captcha_file('read');
+        $latest_code = '';
+    
         if ($type == 'image') {
-            $captchaCode = isset($_SESSION['ff_custom_recaptcha_image_code']) ? sanitize_text_field($_SESSION['ff_custom_recaptcha_image_code']) : false;
-        
-            $captcha_image = $this->generateImageWithCode($captchaCode, $bgColor, $fontColor);
+            foreach ($codes as $code) {
+                if (strpos($code, 'image,') === 0) {
+                    $latest_code = substr($code, 6);
+                    break;
+                }
+            }
+            $captcha_image = $this->generateImageWithCode($latest_code, $bgColor, $fontColor);
             echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         } elseif ($type == 'math') {
-            $math = isset($_SESSION['ff_custom_recaptcha_math_problem']) ? sanitize_text_field($_SESSION['ff_custom_recaptcha_math_problem']) : false;
-            $captcha_image = $this->generateImageWithCode($math, $bgColor, $fontColor);
+            foreach ($codes as $code) {
+                if (strpos($code, 'math,') === 0) {
+                    $latest_code = substr($code, 5);
+                    break;
+                }
+            }
+            $captcha_image = $this->generateImageWithCode($latest_code, $bgColor, $fontColor);
             echo '<img src="data:image/png;base64,' . esc_attr(base64_encode($captcha_image)) . '" alt="Captcha Image" />';
         }
         return (new FluentForm\App\Services\FormBuilder\Components\Text())->compile($data, $form);
+    
     }
     
     private function hideFieldFormEntries()
@@ -259,25 +287,34 @@ function ffc_math_problem()
     return $problem;
 }
 
-function ffc_generate_code($force = false)
-{
-    // if (session_id() == '') {
-    //     session_start();
-    // }
-
+function ffc_generate_code($force = false) {
     $captchaCode = ffC_captcha_code();
-    if (!isset($_SESSION['ff_custom_recaptcha_image_code'])) {
-        $_SESSION['ff_custom_recaptcha_image_code'] = $captchaCode;
-    }
-    
-    
     $problem = ffc_math_problem();
-    if (!isset($_SESSION['ff_custom_recaptcha_math_problem'])) {
-        $_SESSION['ff_custom_recaptcha_math_problem'] = $problem;
-    }
-    if ($force) {
+    
+    if ($force || !isset($_SESSION['ff_custom_recaptcha_image_code'])) {
         $_SESSION['ff_custom_recaptcha_image_code'] = $captchaCode;
+        ffc_manage_captcha_file('write', "image,$captchaCode");
+    }
+    
+    if ($force || !isset($_SESSION['ff_custom_recaptcha_math_problem'])) {
         $_SESSION['ff_custom_recaptcha_math_problem'] = $problem;
+        ffc_manage_captcha_file('write', "math,$problem");
+    }
+}
+
+function ffc_manage_captcha_file($action, $data = null) {
+    $file_path = FF_CUSTOM_CAPTCHA_DIR_PATH . '/captcha_codes.txt';
+    
+    if ($action === 'read') {
+        if (file_exists($file_path)) {
+            return file($file_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        }
+        return [];
+    } elseif ($action === 'write') {
+        $current_codes = ffc_manage_captcha_file('read');
+        array_unshift($current_codes, $data);
+        $current_codes = array_slice($current_codes, 0, 100); // Keep only the last 100 entries
+        file_put_contents($file_path, implode("\n", $current_codes));
     }
 }
 
