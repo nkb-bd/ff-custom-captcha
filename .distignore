@@ -6,4 +6,6 @@
 .gitignore
 README.md
 .idea
+openspec
+captcha_codes.txt
 *.map
